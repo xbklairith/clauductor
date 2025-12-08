@@ -1,14 +1,9 @@
-import type { Session } from '@clauductor/shared'
+import { useSocket } from './hooks/useSocket.js'
+import { MainLayout } from './components/Layout/index.js'
 
-// Placeholder component - will be implemented in frontend-core feature
 export default function App() {
-	// Type check: ensure Session type is imported correctly
-	const _sessionTypeCheck: Session['status'] = 'idle'
-	void _sessionTypeCheck
+	// Initialize socket connection and wire up events
+	useSocket()
 
-	return (
-		<div className="flex h-screen items-center justify-center">
-			<h1 className="text-2xl font-bold">Clauductor</h1>
-		</div>
-	)
+	return <MainLayout />
 }

@@ -1,3 +1,36 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+	body {
+		@apply bg-gray-900 text-white;
+	}
+}
+
+@layer components {
+	.terminal-container {
+		@apply flex-1 bg-[#0d1117] overflow-hidden;
+	}
+
+	.sidebar-item {
+		@apply w-full p-3 text-left flex items-center gap-2
+			hover:bg-gray-800 transition-colors;
+	}
+
+	.sidebar-item-active {
+		@apply bg-gray-700;
+	}
+
+	.status-idle {
+		@apply w-2 h-2 rounded-full bg-gray-500;
+	}
+
+	.status-running {
+		@apply w-2 h-2 rounded-full bg-green-500 animate-pulse;
+	}
+
+	.status-error {
+		@apply w-2 h-2 rounded-full bg-red-500;
+	}
+}
