@@ -14,11 +14,16 @@ export function useSocket(): void {
 	const updateSessionStatus = useSessionStore((state) => state.updateSessionStatus)
 	const appendOutput = useSessionStore((state) => state.appendOutput)
 	const setLoading = useSessionStore((state) => state.setLoading)
+	const setSending = useSessionStore((state) => state.setSending)
+	const setError = useSessionStore((state) => state.setError)
 
 	useEffect(() => {
 		// Connection events
 		const handleConnect = () => {
 			setConnected(true)
+			setReconnecting(false)
+			// Request session list on connect
+			socket.emit('session:list')
 		}
 
 		const handleDisconnect = () => {
@@ -42,6 +47,14 @@ export function useSocket(): void {
 
 		const handleSessionOutput = (output: Parameters<typeof appendOutput>[1]) => {
 			appendOutput(output.sessionId, output)
+			// Reset sending state when we receive output
+			setSending(false)
+		}
+
+		const handleSessionError = (data: { sessionId?: string; message: string }) => {
+			setError(data.message)
+			setLoading(false)
+			setSending(false)
 		}
 
 		const handleSessionStatus = ({
@@ -67,6 +80,7 @@ export function useSocket(): void {
 		socket.on('session:output', handleSessionOutput)
 		socket.on('session:status', handleSessionStatus)
 		socket.on('session:destroyed', handleSessionDestroyed)
+		socket.on('session:error', handleSessionError)
 
 		// Connect
 		connectSocket()
@@ -81,6 +95,7 @@ export function useSocket(): void {
 			socket.off('session:output', handleSessionOutput)
 			socket.off('session:status', handleSessionStatus)
 			socket.off('session:destroyed', handleSessionDestroyed)
+			socket.off('session:error', handleSessionError)
 			disconnectSocket()
 		}
 	}, [
@@ -93,5 +108,7 @@ export function useSocket(): void {
 		updateSessionStatus,
 		appendOutput,
 		setLoading,
+		setSending,
+		setError,
 	])
 }

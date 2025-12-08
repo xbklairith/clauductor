@@ -75,7 +75,11 @@ export function useTerminal(
 	}, [containerRef])
 
 	const write = useCallback((data: string) => {
-		terminalRef.current?.write(data)
+		if (terminalRef.current) {
+			terminalRef.current.write(data)
+			// Auto-scroll to bottom after writing
+			terminalRef.current.scrollToBottom()
+		}
 	}, [])
 
 	const clear = useCallback(() => {

@@ -8,9 +8,12 @@ export function MessageInput() {
 
 	const activeSessionId = useSessionStore((state) => state.activeSessionId)
 	const sendMessage = useSessionStore((state) => state.sendMessage)
+	const isSending = useSessionStore((state) => state.isSending)
+	const error = useSessionStore((state) => state.error)
+	const setError = useSessionStore((state) => state.setError)
 	const isConnected = useConnectionStore((state) => state.isConnected)
 
-	const disabled = !activeSessionId || !isConnected
+	const disabled = !activeSessionId || !isConnected || isSending
 
 	const handleSubmit = () => {
 		if (value.trim() && activeSessionId && !disabled) {
@@ -20,7 +23,8 @@ export function MessageInput() {
 	}
 
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-		if (e.key === 'Enter' && !e.shiftKey) {
+		// Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux) to submit
+		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
 			e.preventDefault()
 			handleSubmit()
 		}
@@ -37,10 +41,29 @@ export function MessageInput() {
 		? 'Select or create a session'
 		: !isConnected
 			? 'Waiting for connection...'
-			: 'Type a message... (Enter to send, Shift+Enter for newline)'
+			: isSending
+				? 'Sending...'
+				: 'Type a message... (⌘+Enter to send)'
 
 	return (
 		<div className="border-t border-gray-700 p-4">
+			{error && (
+				<div className="mb-2 p-2 bg-red-900/50 border border-red-700 rounded text-red-300 text-sm flex justify-between items-center">
+					<span>{error}</span>
+					<button
+						type="button"
+						onClick={() => setError(null)}
+						className="text-red-400 hover:text-red-200 ml-2"
+					>
+						✕
+					</button>
+				</div>
+			)}
+			{isSending && (
+				<div className="mb-2 text-sm text-blue-400 animate-pulse">
+					Waiting for response...
+				</div>
+			)}
 			<textarea
 				ref={textareaRef}
 				value={value}

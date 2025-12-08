@@ -18,7 +18,9 @@ describe('MessageInput', () => {
 			sessions: [],
 			activeSessionId: 'session-1',
 			isLoading: false,
+			isSending: false,
 			outputBuffer: new Map(),
+			error: null,
 		})
 		useConnectionStore.setState({
 			isConnected: true,
@@ -32,13 +34,13 @@ describe('MessageInput', () => {
 		expect(screen.getByRole('textbox')).toBeInTheDocument()
 	})
 
-	it('should submit message on Enter', async () => {
+	it('should submit message on Cmd+Enter', async () => {
 		const { socket } = await import('../../lib/socket.js')
 		render(<MessageInput />)
 
 		const textarea = screen.getByRole('textbox')
 		fireEvent.change(textarea, { target: { value: 'Hello' } })
-		fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+		fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true })
 
 		expect(socket.emit).toHaveBeenCalledWith('session:message', {
 			sessionId: 'session-1',
@@ -46,13 +48,27 @@ describe('MessageInput', () => {
 		})
 	})
 
-	it('should insert newline on Shift+Enter', async () => {
+	it('should submit message on Ctrl+Enter', async () => {
 		const { socket } = await import('../../lib/socket.js')
 		render(<MessageInput />)
 
 		const textarea = screen.getByRole('textbox')
 		fireEvent.change(textarea, { target: { value: 'Hello' } })
-		fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
+		fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
+
+		expect(socket.emit).toHaveBeenCalledWith('session:message', {
+			sessionId: 'session-1',
+			content: 'Hello',
+		})
+	})
+
+	it('should not submit on plain Enter (allows newlines)', async () => {
+		const { socket } = await import('../../lib/socket.js')
+		render(<MessageInput />)
+
+		const textarea = screen.getByRole('textbox')
+		fireEvent.change(textarea, { target: { value: 'Hello' } })
+		fireEvent.keyDown(textarea, { key: 'Enter' })
 
 		expect(socket.emit).not.toHaveBeenCalled()
 	})
@@ -78,8 +94,24 @@ describe('MessageInput', () => {
 
 		const textarea = screen.getByRole('textbox')
 		fireEvent.change(textarea, { target: { value: 'Hello' } })
-		fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+		fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true })
 
 		expect(textarea).toHaveValue('')
+	})
+
+	it('should be disabled when sending', () => {
+		useSessionStore.setState({ isSending: true })
+
+		render(<MessageInput />)
+
+		expect(screen.getByRole('textbox')).toBeDisabled()
+	})
+
+	it('should show error message when error exists', () => {
+		useSessionStore.setState({ error: 'Test error message' })
+
+		render(<MessageInput />)
+
+		expect(screen.getByText('Test error message')).toBeInTheDocument()
 	})
 })

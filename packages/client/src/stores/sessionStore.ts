@@ -13,7 +13,9 @@ export interface SessionState {
 	sessions: Session[]
 	activeSessionId: string | null
 	isLoading: boolean
+	isSending: boolean
 	outputBuffer: Map<string, SessionOutput[]>
+	error: string | null
 
 	// Actions
 	setSessions: (sessions: Session[]) => void
@@ -22,6 +24,8 @@ export interface SessionState {
 	setActiveSession: (sessionId: string | null) => void
 	updateSessionStatus: (sessionId: string, status: Session['status']) => void
 	setLoading: (loading: boolean) => void
+	setSending: (sending: boolean) => void
+	setError: (error: string | null) => void
 
 	// Async actions (emit to socket)
 	createSession: (options?: CreateSessionOptions) => void
@@ -38,7 +42,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 	sessions: [],
 	activeSessionId: null,
 	isLoading: false,
+	isSending: false,
 	outputBuffer: new Map(),
+	error: null,
 
 	setSessions: (sessions) => set({ sessions }),
 
@@ -70,12 +76,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
 	setLoading: (loading) => set({ isLoading: loading }),
 
+	setSending: (sending) => set({ isSending: sending }),
+
+	setError: (error) => set({ error }),
+
 	createSession: (options) => {
-		set({ isLoading: true })
+		set({ isLoading: true, error: null })
 		socket.emit('session:create', options ?? {})
 	},
 
 	sendMessage: (sessionId, content) => {
+		set({ isSending: true, error: null })
 		socket.emit('session:message', { sessionId, content })
 	},
 

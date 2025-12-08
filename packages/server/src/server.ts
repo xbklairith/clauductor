@@ -1,5 +1,8 @@
 import express from 'express'
 import { createServer as createHttpServer } from 'node:http'
+import { existsSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Server as SocketIOServer } from 'socket.io'
 import type {
 	ClientToServerEvents,
@@ -9,11 +12,14 @@ import type {
 } from '@clauductor/shared'
 import { SessionManager } from './services/SessionManager.js'
 
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
 export interface ServerConfig {
 	port: number
 	corsOrigins: string[]
 	dataDir?: string
 	claudeCommand?: string
+	staticDir?: string
 }
 
 export interface ClauductorServer {
@@ -86,6 +92,16 @@ export function createServer(config: ServerConfig): ClauductorServer {
 	app.get('/health', (_req, res) => {
 		res.json({ status: 'ok' })
 	})
+
+	// Serve static files from client dist
+	const staticDir = config.staticDir || join(__dirname, '../../client/dist')
+	if (existsSync(staticDir)) {
+		app.use(express.static(staticDir))
+		// SPA fallback - serve index.html for all non-API routes
+		app.get('*', (_req, res) => {
+			res.sendFile(join(staticDir, 'index.html'))
+		})
+	}
 
 	let isStarted = false
 

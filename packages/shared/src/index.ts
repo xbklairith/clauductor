@@ -46,6 +46,7 @@ export interface ServerToClientEvents {
 	'session:status': (data: SessionStatus) => void
 	'session:destroyed': (data: { sessionId: string }) => void
 	'session:list': (sessions: Session[]) => void
+	'session:error': (data: { sessionId?: string; message: string }) => void
 }
 
 export interface ClientToServerEvents {
