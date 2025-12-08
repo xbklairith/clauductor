@@ -61,9 +61,22 @@ describe('SessionManager', () => {
 		})
 
 		it('should set working directory', async () => {
-			const session = await manager.createSession({ workingDir: '/tmp/test' })
+			const tmpDir = os.tmpdir()
+			const session = await manager.createSession({ workingDir: tmpDir })
 
-			expect(session.workingDir).toBe('/tmp/test')
+			expect(session.workingDir).toBe(tmpDir)
+		})
+
+		it('should reject non-existent working directory', async () => {
+			await expect(
+				manager.createSession({ workingDir: '/nonexistent/path/that/does/not/exist' }),
+			).rejects.toThrow('Working directory does not exist')
+		})
+
+		it('should reject path traversal attempts', async () => {
+			await expect(manager.createSession({ workingDir: '../../../etc' })).rejects.toThrow(
+				'path traversal not allowed',
+			)
 		})
 	})
 

@@ -65,8 +65,10 @@ export function createServer(config: ServerConfig): ClauductorServer {
 			try {
 				const session = await sessionManager.createSession(options)
 				io.emit('session:created', session)
-			} catch {
-				// Handle error
+			} catch (error) {
+				// REQ-025: Emit actionable error to client
+				const message = error instanceof Error ? error.message : 'Failed to create session'
+				socket.emit('session:error', { message })
 			}
 		})
 

@@ -1,4 +1,6 @@
 import { EventEmitter } from 'node:events'
+import { existsSync, statSync } from 'node:fs'
+import { resolve, normalize } from 'node:path'
 import { nanoid } from 'nanoid'
 import type {
 	CreateSessionOptions,
@@ -13,6 +15,7 @@ import { ProcessPool, type ProcessHandle } from './ProcessPool.js'
 export interface SessionManagerConfig {
 	dataDir?: string
 	claudeCommand?: string
+	persistenceInterval?: number // ms between auto-saves
 }
 
 interface ManagedSession {
@@ -26,23 +29,77 @@ export class SessionManager extends EventEmitter {
 	private fileStorage: FileStorage
 	private processPool: ProcessPool
 	private claudeCommand: string
+	private persistenceTimer?: ReturnType<typeof setInterval>
+	private persistenceInterval: number
 
 	constructor(config: SessionManagerConfig = {}) {
 		super()
 		this.fileStorage = new FileStorage({ dataDir: config.dataDir })
 		this.processPool = new ProcessPool()
 		this.claudeCommand = config.claudeCommand || 'claude'
+		this.persistenceInterval = config.persistenceInterval ?? 30000 // 30s default
+		this.startPeriodicPersistence()
+	}
+
+	/**
+	 * Validate and normalize a working directory path.
+	 * Throws if path is invalid, doesn't exist, or isn't a directory.
+	 */
+	private validateWorkingDir(workingDir: string): string {
+		// Normalize and resolve to absolute path
+		const normalized = normalize(resolve(workingDir))
+
+		// Check for path traversal attempts (e.g., containing ..)
+		if (workingDir.includes('..')) {
+			throw new Error('Invalid working directory: path traversal not allowed')
+		}
+
+		// Check if path exists
+		if (!existsSync(normalized)) {
+			throw new Error(`Working directory does not exist: ${normalized}`)
+		}
+
+		// Check if it's a directory
+		const stats = statSync(normalized)
+		if (!stats.isDirectory()) {
+			throw new Error(`Path is not a directory: ${normalized}`)
+		}
+
+		return normalized
+	}
+
+	/**
+	 * Start periodic persistence for active sessions (REQ-011)
+	 */
+	private startPeriodicPersistence(): void {
+		this.persistenceTimer = setInterval(() => {
+			this.persistAllSessions()
+		}, this.persistenceInterval)
+	}
+
+	/**
+	 * Save all sessions to disk (non-blocking)
+	 */
+	private persistAllSessions(): void {
+		for (const managed of this.sessions.values()) {
+			this.fileStorage.saveSession(managed.session).catch(() => {
+				// Log error but don't fail - persistence is best-effort
+			})
+		}
 	}
 
 	async createSession(options: CreateSessionOptions = {}): Promise<Session> {
 		const id = nanoid(10)
 		const now = new Date().toISOString()
 
+		// Validate working directory (REQ-028)
+		const workingDir = this.validateWorkingDir(options.workingDir || process.cwd())
+
 		const session: Session = {
 			id,
 			name: options.name || `Session ${id.slice(0, 4)}`,
 			status: 'idle',
-			workingDir: options.workingDir || process.cwd(),
+			workingDir,
 			createdAt: now,
 			updatedAt: now,
 		}
@@ -53,6 +110,9 @@ export class SessionManager extends EventEmitter {
 
 		// Persist session
 		await this.fileStorage.saveSession(session)
+
+		// Spawn Claude CLI process immediately (REQ-002)
+		this.spawnProcess(id)
 
 		return session
 	}
@@ -82,6 +142,12 @@ export class SessionManager extends EventEmitter {
 	}
 
 	async destroyAll(): Promise<void> {
+		// Stop periodic persistence
+		if (this.persistenceTimer) {
+			clearInterval(this.persistenceTimer)
+			this.persistenceTimer = undefined
+		}
+
 		const sessionIds = Array.from(this.sessions.keys())
 		for (const id of sessionIds) {
 			await this.destroySession(id)
@@ -113,7 +179,7 @@ export class SessionManager extends EventEmitter {
 		try {
 			const handle = this.processPool.spawn({
 				command: this.claudeCommand,
-				args: [], // Can add --output-format stream-json later
+				args: ['--output-format', 'stream-json'], // REQ-012/016: Enable structured events
 				cwd: managed.session.workingDir,
 			})
 
