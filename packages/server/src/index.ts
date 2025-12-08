@@ -1,4 +1,4 @@
-// Re-export types from shared for convenience
+// Re-export types from shared
 export type {
 	Session,
 	CreateSessionOptions,
@@ -10,5 +10,14 @@ export type {
 	ClientToServerEvents,
 } from '@clauductor/shared'
 
-// Server exports will be added in backend-core feature
+// Export server
+export { createServer, type ServerConfig, type ClauductorServer } from './server.js'
+
+// Export services
+export { FileStorage, type FileStorageConfig } from './services/FileStorage.js'
+export { OutputParser, type ParsedOutput, type OutputMode } from './services/OutputParser.js'
+export { ProcessPool, type SpawnOptions, type ProcessHandle } from './services/ProcessPool.js'
+export { SessionManager, type SessionManagerConfig } from './services/SessionManager.js'
+
+// Package version
 export const VERSION = '0.1.0'
