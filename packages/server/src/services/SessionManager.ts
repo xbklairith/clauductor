@@ -281,7 +281,7 @@ export class SessionManager extends EventEmitter {
 					sessionId,
 					type: output.type,
 					content: output.content,
-					event: output.event ?? null,
+					event: output.event ? JSON.stringify(output.event) : null,
 					timestamp: sessionOutput.timestamp,
 				})
 			}
