@@ -8,6 +8,8 @@ import type {
 	SessionStatus,
 } from '@clauductor/shared'
 import { nanoid } from 'nanoid'
+import type { MessageRepository } from '../db/MessageRepository.js'
+import type { OutputRepository } from '../db/OutputRepository.js'
 import type { SessionRepository } from '../db/SessionRepository.js'
 import { FileStorage } from './FileStorage.js'
 import { OutputParser } from './OutputParser.js'
@@ -18,6 +20,10 @@ export interface SessionManagerConfig {
 	claudeCommand?: string
 	persistenceInterval?: number // ms between auto-saves
 	sessionRepository?: SessionRepository // Optional database repository
+	messageRepository?: MessageRepository // Optional message storage
+	outputRepository?: OutputRepository // Optional output storage
+	outputBufferInterval?: number // ms between output buffer flushes (default 100ms)
+	outputBufferSize?: number // max outputs before flush (default 100)
 }
 
 interface ManagedSession {
@@ -26,22 +32,40 @@ interface ManagedSession {
 	parser: OutputParser
 }
 
+interface BufferedOutput {
+	sessionId: string
+	type: string
+	content: string
+	event: string | null
+	timestamp: number
+}
+
 export class SessionManager extends EventEmitter {
 	private sessions = new Map<string, ManagedSession>()
 	private fileStorage: FileStorage
 	private sessionRepo?: SessionRepository
+	private messageRepo?: MessageRepository
+	private outputRepo?: OutputRepository
 	private processPool: ProcessPool
 	private claudeCommand: string
 	private persistenceTimer?: ReturnType<typeof setInterval>
 	private persistenceInterval: number
+	private outputBuffer: BufferedOutput[] = []
+	private outputBufferTimer?: ReturnType<typeof setTimeout>
+	private outputBufferInterval: number
+	private outputBufferSize: number
 
 	constructor(config: SessionManagerConfig = {}) {
 		super()
 		this.fileStorage = new FileStorage({ dataDir: config.dataDir })
 		this.sessionRepo = config.sessionRepository
+		this.messageRepo = config.messageRepository
+		this.outputRepo = config.outputRepository
 		this.processPool = new ProcessPool()
 		this.claudeCommand = config.claudeCommand || 'claude'
 		this.persistenceInterval = config.persistenceInterval ?? 30000 // 30s default
+		this.outputBufferInterval = config.outputBufferInterval ?? 100 // 100ms default
+		this.outputBufferSize = config.outputBufferSize ?? 100 // 100 items default
 		this.startPeriodicPersistence()
 	}
 
@@ -178,6 +202,20 @@ export class SessionManager extends EventEmitter {
 		const managed = this.sessions.get(sessionId)
 		if (!managed) return
 
+		// Store user message to database
+		if (this.messageRepo) {
+			try {
+				this.messageRepo.create({
+					sessionId,
+					role: 'user',
+					content: message,
+					timestamp: Date.now(),
+				})
+			} catch {
+				// Log error but don't fail - message storage is best-effort
+			}
+		}
+
 		// If no process, spawn one
 		if (!managed.processHandle) {
 			this.spawnProcess(sessionId)
@@ -235,6 +273,17 @@ export class SessionManager extends EventEmitter {
 				content: output.content,
 				event: output.event,
 				timestamp: Date.now(),
+			}
+
+			// Buffer output for database storage
+			if (this.outputRepo) {
+				this.bufferOutput({
+					sessionId,
+					type: output.type,
+					content: output.content,
+					event: output.event ?? null,
+					timestamp: sessionOutput.timestamp,
+				})
 			}
 
 			this.emit('output', sessionId, sessionOutput)
@@ -300,5 +349,55 @@ export class SessionManager extends EventEmitter {
 		} else {
 			await this.fileStorage.saveSession(managed.session)
 		}
+	}
+
+	/**
+	 * Buffer an output for batch insertion.
+	 */
+	private bufferOutput(output: BufferedOutput): void {
+		this.outputBuffer.push(output)
+
+		// Flush immediately if buffer is full
+		if (this.outputBuffer.length >= this.outputBufferSize) {
+			this.flushOutputsSync()
+			return
+		}
+
+		// Schedule a flush if not already scheduled
+		if (!this.outputBufferTimer) {
+			this.outputBufferTimer = setTimeout(() => {
+				this.flushOutputsSync()
+			}, this.outputBufferInterval)
+		}
+	}
+
+	/**
+	 * Flush buffered outputs to the database (sync).
+	 */
+	private flushOutputsSync(): void {
+		if (this.outputBufferTimer) {
+			clearTimeout(this.outputBufferTimer)
+			this.outputBufferTimer = undefined
+		}
+
+		if (this.outputBuffer.length === 0 || !this.outputRepo) {
+			return
+		}
+
+		const toFlush = this.outputBuffer.splice(0, this.outputBuffer.length)
+
+		try {
+			this.outputRepo.createBatch(toFlush)
+		} catch {
+			// Log error but don't fail - output storage is best-effort
+		}
+	}
+
+	/**
+	 * Flush any pending buffered outputs to the database.
+	 * Call this before shutdown or when you need outputs persisted immediately.
+	 */
+	async flushOutputs(): Promise<void> {
+		this.flushOutputsSync()
 	}
 }
