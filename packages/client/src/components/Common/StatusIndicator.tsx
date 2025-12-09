@@ -24,6 +24,7 @@ export function StatusIndicator({ status }: StatusIndicatorProps) {
 			className={`${baseClasses} ${statusClasses[status]}`}
 			aria-label={ariaLabels[status]}
 			role="status"
+			data-testid="status-indicator"
 		/>
 	)
 }

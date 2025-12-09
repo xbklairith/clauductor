@@ -12,6 +12,7 @@ export function SessionItem({ session, isActive, onClick }: SessionItemProps) {
 		<button
 			type="button"
 			onClick={onClick}
+			data-testid="session-item"
 			className={`
 				w-full p-3 text-left flex items-center gap-2
 				transition-colors cursor-pointer

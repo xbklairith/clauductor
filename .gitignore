@@ -39,3 +39,4 @@ pnpm-debug.log*
 
 # Documentation (local only)
 docx/
+.playwright-data/

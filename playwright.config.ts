@@ -12,7 +12,7 @@ export default defineConfig({
 	workers: 1,
 	reporter: 'html',
 	use: {
-		baseURL: 'http://localhost:3001',
+		baseURL: 'http://localhost:3002',
 		trace: 'on-first-retry',
 		screenshot: 'only-on-failure',
 		video: 'retain-on-failure',
@@ -25,9 +25,10 @@ export default defineConfig({
 	],
 	// Build and start server before running tests
 	webServer: {
-		command: 'pnpm build && pnpm --filter @clauductor/server start -- --no-browser --port 3001',
-		url: 'http://localhost:3001',
-		reuseExistingServer: !process.env.CI,
+		command:
+			'pnpm build && cd packages/server && node dist/cli.js --no-browser --port 3002 --data-dir ../../.playwright-data',
+		url: 'http://localhost:3002',
+		reuseExistingServer: false, // Always start fresh for E2E tests
 		timeout: 120000,
 		stdout: 'pipe',
 		stderr: 'pipe',

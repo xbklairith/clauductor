@@ -9,22 +9,26 @@ test.describe('Clauductor Browser E2E', () => {
 		// Wait for the page to load
 		await page.waitForLoadState('networkidle')
 
-		// Check for "No sessions" message or empty list
-		const sessionListEmpty = page.locator('text=No sessions') // Update selector based on actual UI
-		await expect(sessionListEmpty.or(page.locator('[data-testid="session-list"]'))).toBeVisible()
+		// Check for "No sessions yet" message
+		const sessionListEmpty = page.locator('[data-testid="session-list-empty"]')
+		await expect(sessionListEmpty).toBeVisible()
+		await expect(sessionListEmpty).toHaveText('No sessions yet')
 	})
 
 	test('should create a new session', async ({ page }) => {
 		await page.goto('/')
 		await page.waitForLoadState('networkidle')
 
-		// Click "New Session" button
-		const newSessionButton = page.locator('button', { hasText: /new session/i })
+		// Wait for socket connection (button becomes enabled)
+		const newSessionButton = page.locator('[data-testid="new-session-button"]')
 		await expect(newSessionButton).toBeVisible()
+		await expect(newSessionButton).toBeEnabled({ timeout: 10000 })
+
+		// Click "New Session" button
 		await newSessionButton.click()
 
-		// Wait for session to be created
-		await page.waitForTimeout(500)
+		// Wait for session to be created and appear in the list
+		await page.waitForTimeout(1000)
 
 		// Verify session appears in the list
 		const sessionItem = page.locator('[data-testid="session-item"]').first()
@@ -35,10 +39,11 @@ test.describe('Clauductor Browser E2E', () => {
 		await page.goto('/')
 		await page.waitForLoadState('networkidle')
 
-		// Create a session first
-		const newSessionButton = page.locator('button', { hasText: /new session/i })
+		// Wait for socket connection and create a session
+		const newSessionButton = page.locator('[data-testid="new-session-button"]')
+		await expect(newSessionButton).toBeEnabled({ timeout: 10000 })
 		await newSessionButton.click()
-		await page.waitForTimeout(500)
+		await page.waitForTimeout(1000)
 
 		// Find the message input
 		const messageInput = page.locator('input[type="text"]').or(page.locator('textarea'))
@@ -60,18 +65,21 @@ test.describe('Clauductor Browser E2E', () => {
 		await page.goto('/')
 		await page.waitForLoadState('networkidle')
 
+		// Wait for socket connection
+		const newSessionButton = page.locator('[data-testid="new-session-button"]')
+		await expect(newSessionButton).toBeEnabled({ timeout: 10000 })
+
 		// Create first session
-		const newSessionButton = page.locator('button', { hasText: /new session/i })
 		await newSessionButton.click()
-		await page.waitForTimeout(500)
+		await page.waitForTimeout(1000)
 
 		// Create second session
 		await newSessionButton.click()
-		await page.waitForTimeout(500)
+		await page.waitForTimeout(1000)
 
 		// Create third session
 		await newSessionButton.click()
-		await page.waitForTimeout(500)
+		await page.waitForTimeout(1000)
 
 		// Verify all three sessions are in the list
 		const sessionItems = page.locator('[data-testid="session-item"]')
@@ -82,12 +90,13 @@ test.describe('Clauductor Browser E2E', () => {
 		await page.goto('/')
 		await page.waitForLoadState('networkidle')
 
-		// Create two sessions
-		const newSessionButton = page.locator('button', { hasText: /new session/i })
+		// Wait for socket connection and create two sessions
+		const newSessionButton = page.locator('[data-testid="new-session-button"]')
+		await expect(newSessionButton).toBeEnabled({ timeout: 10000 })
 		await newSessionButton.click()
-		await page.waitForTimeout(500)
+		await page.waitForTimeout(1000)
 		await newSessionButton.click()
-		await page.waitForTimeout(500)
+		await page.waitForTimeout(1000)
 
 		// Get session items
 		const sessionItems = page.locator('[data-testid="session-item"]')
@@ -114,10 +123,11 @@ test.describe('Clauductor Browser E2E', () => {
 		await page.goto('/')
 		await page.waitForLoadState('networkidle')
 
-		// Create a session
-		const newSessionButton = page.locator('button', { hasText: /new session/i })
+		// Wait for socket connection and create a session
+		const newSessionButton = page.locator('[data-testid="new-session-button"]')
+		await expect(newSessionButton).toBeEnabled({ timeout: 10000 })
 		await newSessionButton.click()
-		await page.waitForTimeout(500)
+		await page.waitForTimeout(1000)
 
 		// Look for status indicator (idle/running/error)
 		const statusIndicator = page

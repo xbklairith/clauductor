@@ -9,14 +9,17 @@ export function SessionList() {
 
 	if (sessions.length === 0) {
 		return (
-			<div className="flex-1 flex items-center justify-center p-4 text-gray-500 text-sm">
+			<div
+				className="flex-1 flex items-center justify-center p-4 text-gray-500 text-sm"
+				data-testid="session-list-empty"
+			>
 				No sessions yet
 			</div>
 		)
 	}
 
 	return (
-		<div className="flex-1 overflow-y-auto">
+		<div className="flex-1 overflow-y-auto" data-testid="session-list">
 			{sessions.map((session: Session) => (
 				<SessionItem
 					key={session.id}

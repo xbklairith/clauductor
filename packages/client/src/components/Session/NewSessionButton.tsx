@@ -19,6 +19,7 @@ export function NewSessionButton() {
 			type="button"
 			onClick={handleClick}
 			disabled={disabled}
+			data-testid="new-session-button"
 			className={`
 				w-full py-2 px-4 rounded-lg font-medium
 				transition-colors cursor-pointer
