@@ -186,4 +186,132 @@ describe('SessionRepository', () => {
 			expect(found[1].id).toBe('old-session')
 		})
 	})
+
+	describe('delete', () => {
+		it('should soft delete a session by setting deleted_at', () => {
+			const session: Session = {
+				id: 'delete-test',
+				name: 'Delete Test',
+				status: 'idle',
+				workingDir: '/tmp',
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+			}
+
+			repo.create(session)
+			repo.delete('delete-test')
+
+			// Should not be found via findById
+			const found = repo.findById('delete-test')
+			expect(found).toBeNull()
+		})
+
+		it('should exclude deleted sessions from findAll', () => {
+			const sessions: Session[] = [
+				{
+					id: 'keep-session',
+					name: 'Keep Session',
+					status: 'idle',
+					workingDir: '/tmp',
+					createdAt: new Date().toISOString(),
+					updatedAt: new Date().toISOString(),
+				},
+				{
+					id: 'delete-session',
+					name: 'Delete Session',
+					status: 'idle',
+					workingDir: '/tmp',
+					createdAt: new Date().toISOString(),
+					updatedAt: new Date().toISOString(),
+				},
+			]
+
+			for (const session of sessions) {
+				repo.create(session)
+			}
+
+			repo.delete('delete-session')
+
+			const found = repo.findAll()
+			expect(found).toHaveLength(1)
+			expect(found[0].id).toBe('keep-session')
+		})
+	})
+
+	describe('findMostRecent', () => {
+		it('should return the most recently updated session', () => {
+			const sessions: Session[] = [
+				{
+					id: 'older-session',
+					name: 'Older Session',
+					status: 'idle',
+					workingDir: '/tmp',
+					createdAt: '2025-01-01T00:00:00.000Z',
+					updatedAt: '2025-01-01T00:00:00.000Z',
+				},
+				{
+					id: 'newest-session',
+					name: 'Newest Session',
+					status: 'running',
+					workingDir: '/home',
+					createdAt: '2025-01-02T00:00:00.000Z',
+					updatedAt: '2025-01-03T00:00:00.000Z',
+				},
+				{
+					id: 'middle-session',
+					name: 'Middle Session',
+					status: 'idle',
+					workingDir: '/var',
+					createdAt: '2025-01-02T00:00:00.000Z',
+					updatedAt: '2025-01-02T00:00:00.000Z',
+				},
+			]
+
+			for (const session of sessions) {
+				repo.create(session)
+			}
+
+			const mostRecent = repo.findMostRecent()
+
+			expect(mostRecent).not.toBeNull()
+			expect(mostRecent?.id).toBe('newest-session')
+		})
+
+		it('should return null when no sessions exist', () => {
+			const mostRecent = repo.findMostRecent()
+			expect(mostRecent).toBeNull()
+		})
+
+		it('should exclude deleted sessions', () => {
+			const sessions: Session[] = [
+				{
+					id: 'older-active',
+					name: 'Older Active',
+					status: 'idle',
+					workingDir: '/tmp',
+					createdAt: '2025-01-01T00:00:00.000Z',
+					updatedAt: '2025-01-01T00:00:00.000Z',
+				},
+				{
+					id: 'newest-but-deleted',
+					name: 'Newest But Deleted',
+					status: 'idle',
+					workingDir: '/home',
+					createdAt: '2025-01-02T00:00:00.000Z',
+					updatedAt: '2025-01-03T00:00:00.000Z',
+				},
+			]
+
+			for (const session of sessions) {
+				repo.create(session)
+			}
+
+			repo.delete('newest-but-deleted')
+
+			const mostRecent = repo.findMostRecent()
+
+			expect(mostRecent).not.toBeNull()
+			expect(mostRecent?.id).toBe('older-active')
+		})
+	})
 })

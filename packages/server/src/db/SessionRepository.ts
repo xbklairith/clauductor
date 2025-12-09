@@ -14,6 +14,11 @@ const SQL = {
 		SET name = @name, status = @status, working_dir = @workingDir, updated_at = @updatedAt
 		WHERE id = @id
 	`,
+	SOFT_DELETE: `
+		UPDATE sessions
+		SET deleted_at = @deletedAt
+		WHERE id = @id
+	`,
 	FIND_BY_ID: `
 		SELECT id, name, status, working_dir, created_at, updated_at, deleted_at
 		FROM sessions
@@ -24,6 +29,13 @@ const SQL = {
 		FROM sessions
 		WHERE deleted_at IS NULL
 		ORDER BY updated_at DESC
+	`,
+	FIND_MOST_RECENT: `
+		SELECT id, name, status, working_dir, created_at, updated_at, deleted_at
+		FROM sessions
+		WHERE deleted_at IS NULL
+		ORDER BY updated_at DESC
+		LIMIT 1
 	`,
 } as const
 
@@ -126,5 +138,34 @@ export class SessionRepository {
 		const rows = stmt.all() as SessionRow[]
 
 		return rows.map(rowToSession)
+	}
+
+	/**
+	 * Soft delete a session by setting deleted_at timestamp.
+	 *
+	 * @param id - The session id to delete
+	 */
+	delete(id: string): void {
+		const stmt = this.db.prepare(SQL.SOFT_DELETE)
+		stmt.run({
+			id,
+			deletedAt: new Date().toISOString(),
+		})
+	}
+
+	/**
+	 * Find the most recently updated session.
+	 *
+	 * @returns The most recent session or null if none exist
+	 */
+	findMostRecent(): Session | null {
+		const stmt = this.db.prepare(SQL.FIND_MOST_RECENT)
+		const row = stmt.get() as SessionRow | undefined
+
+		if (!row) {
+			return null
+		}
+
+		return rowToSession(row)
 	}
 }
