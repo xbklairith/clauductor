@@ -1,21 +1,23 @@
 import { EventEmitter } from 'node:events'
 import { existsSync, statSync } from 'node:fs'
-import { resolve, normalize } from 'node:path'
-import { nanoid } from 'nanoid'
+import { normalize, resolve } from 'node:path'
 import type {
 	CreateSessionOptions,
 	Session,
 	SessionOutput,
 	SessionStatus,
 } from '@clauductor/shared'
+import { nanoid } from 'nanoid'
+import type { SessionRepository } from '../db/SessionRepository.js'
 import { FileStorage } from './FileStorage.js'
 import { OutputParser } from './OutputParser.js'
-import { ProcessPool, type ProcessHandle } from './ProcessPool.js'
+import { type ProcessHandle, ProcessPool } from './ProcessPool.js'
 
 export interface SessionManagerConfig {
 	dataDir?: string
 	claudeCommand?: string
 	persistenceInterval?: number // ms between auto-saves
+	sessionRepository?: SessionRepository // Optional database repository
 }
 
 interface ManagedSession {
@@ -27,6 +29,7 @@ interface ManagedSession {
 export class SessionManager extends EventEmitter {
 	private sessions = new Map<string, ManagedSession>()
 	private fileStorage: FileStorage
+	private sessionRepo?: SessionRepository
 	private processPool: ProcessPool
 	private claudeCommand: string
 	private persistenceTimer?: ReturnType<typeof setInterval>
@@ -35,6 +38,7 @@ export class SessionManager extends EventEmitter {
 	constructor(config: SessionManagerConfig = {}) {
 		super()
 		this.fileStorage = new FileStorage({ dataDir: config.dataDir })
+		this.sessionRepo = config.sessionRepository
 		this.processPool = new ProcessPool()
 		this.claudeCommand = config.claudeCommand || 'claude'
 		this.persistenceInterval = config.persistenceInterval ?? 30000 // 30s default
@@ -78,13 +82,21 @@ export class SessionManager extends EventEmitter {
 	}
 
 	/**
-	 * Save all sessions to disk (non-blocking)
+	 * Save all sessions to storage (non-blocking)
 	 */
 	private persistAllSessions(): void {
 		for (const managed of this.sessions.values()) {
-			this.fileStorage.saveSession(managed.session).catch(() => {
-				// Log error but don't fail - persistence is best-effort
-			})
+			if (this.sessionRepo) {
+				try {
+					this.sessionRepo.update(managed.session)
+				} catch {
+					// Log error but don't fail - persistence is best-effort
+				}
+			} else {
+				this.fileStorage.saveSession(managed.session).catch(() => {
+					// Log error but don't fail - persistence is best-effort
+				})
+			}
 		}
 	}
 
@@ -108,8 +120,12 @@ export class SessionManager extends EventEmitter {
 		const managed: ManagedSession = { session, parser }
 		this.sessions.set(id, managed)
 
-		// Persist session
-		await this.fileStorage.saveSession(session)
+		// Persist session - prefer database, fallback to file
+		if (this.sessionRepo) {
+			this.sessionRepo.create(session)
+		} else {
+			await this.fileStorage.saveSession(session)
+		}
 
 		// Spawn Claude CLI process immediately (REQ-002)
 		this.spawnProcess(id)
@@ -134,8 +150,12 @@ export class SessionManager extends EventEmitter {
 			this.processPool.kill(managed.processHandle.id)
 		}
 
-		// Delete from file storage
-		await this.fileStorage.deleteSession(sessionId)
+		// Delete from storage - prefer database (soft delete), fallback to file
+		if (this.sessionRepo) {
+			this.sessionRepo.delete(sessionId)
+		} else {
+			await this.fileStorage.deleteSession(sessionId)
+		}
 
 		// Remove from memory
 		this.sessions.delete(sessionId)
@@ -244,14 +264,24 @@ export class SessionManager extends EventEmitter {
 			status,
 		} as SessionStatus)
 
-		// Persist (non-blocking)
-		this.fileStorage.saveSession(managed.session).catch(() => {
-			// Log error but don't fail
-		})
+		// Persist (non-blocking) - prefer database, fallback to file
+		if (this.sessionRepo) {
+			try {
+				this.sessionRepo.update(managed.session)
+			} catch {
+				// Log error but don't fail
+			}
+		} else {
+			this.fileStorage.saveSession(managed.session).catch(() => {
+				// Log error but don't fail
+			})
+		}
 	}
 
 	async loadSessions(): Promise<void> {
-		const sessions = await this.fileStorage.loadAllSessions()
+		const sessions = this.sessionRepo
+			? this.sessionRepo.findAll()
+			: await this.fileStorage.loadAllSessions()
 
 		for (const session of sessions) {
 			// Reset status to idle on load (process is not running)
@@ -265,6 +295,10 @@ export class SessionManager extends EventEmitter {
 		const managed = this.sessions.get(sessionId)
 		if (!managed) return
 
-		await this.fileStorage.saveSession(managed.session)
+		if (this.sessionRepo) {
+			this.sessionRepo.update(managed.session)
+		} else {
+			await this.fileStorage.saveSession(managed.session)
+		}
 	}
 }
