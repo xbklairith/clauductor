@@ -9,7 +9,6 @@ import { createDatabase, type Database } from '../db/Database.js'
 import { runMigrations } from '../db/migrations/runner.js'
 import { SessionRepository } from '../db/SessionRepository.js'
 import { MessageRepository } from '../db/MessageRepository.js'
-import { OutputRepository } from '../db/OutputRepository.js'
 import type { Session, SessionOutput } from '@clauductor/shared'
 
 // Mock node-pty to return controlled output
@@ -27,10 +26,10 @@ vi.mock('node-pty', () => ({
 					// Emit a structured JSON response
 					emitter.emit(
 						'data',
-						JSON.stringify({
+						`${JSON.stringify({
 							type: 'assistant',
 							message: { content: `Echo: ${userMessage}` },
-						}) + '\n',
+						})}\n`,
 					)
 				}, 10)
 				// Simulate process completing
@@ -52,7 +51,6 @@ describe('E2E User Flow via Socket.io', () => {
 	let database: Database
 	let sessionRepo: SessionRepository
 	let messageRepo: MessageRepository
-	let outputRepo: OutputRepository
 	let server: ClauductorServer
 	let client: ClientSocket
 	let port: number
@@ -68,7 +66,6 @@ describe('E2E User Flow via Socket.io', () => {
 			runMigrations(database.db)
 			sessionRepo = new SessionRepository(database.db)
 			messageRepo = new MessageRepository(database.db)
-			outputRepo = new OutputRepository(database.db)
 
 			// Find available port
 			port = 3001 + Math.floor(Math.random() * 1000)
@@ -82,7 +79,7 @@ describe('E2E User Flow via Socket.io', () => {
 
 	afterEach(async () => {
 		// Disconnect client
-		if (client && client.connected) {
+		if (client?.connected) {
 			client.disconnect()
 		}
 
