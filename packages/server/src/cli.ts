@@ -3,17 +3,25 @@
 import { program } from 'commander'
 import open from 'open'
 import { createServer } from './server.js'
+import { initializeContinueMode } from './utils/continueMode.js'
 import { log } from './utils/logger.js'
+import { checkPort, isValidPort, suggestNextPort } from './utils/port.js'
 import { validateEnvironment } from './utils/validate.js'
-import { checkPort, suggestNextPort, isValidPort } from './utils/port.js'
 
 const DEFAULT_PORT = 3001
 const DEFAULT_CORS_ORIGINS = ['http://localhost:5173', 'http://localhost:3000']
+const DEFAULT_DATA_DIR =
+	process.env.CLAUDUCTOR_DATA_DIR ||
+	(process.platform === 'darwin'
+		? `${process.env.HOME}/Library/Application Support/clauductor`
+		: `${process.env.HOME}/.local/share/clauductor`)
 
 interface CliOptions {
 	port: string
 	noBrowser: boolean
 	cors: string[]
+	continue: boolean
+	dataDir: string
 }
 
 program
@@ -22,6 +30,8 @@ program
 	.option('-p, --port <number>', `Server port (default: ${DEFAULT_PORT})`, String(DEFAULT_PORT))
 	.option('--no-browser', 'Do not open browser automatically')
 	.option('--cors <origins...>', 'Allowed CORS origins', DEFAULT_CORS_ORIGINS)
+	.option('-c, --continue', 'Continue the most recent session')
+	.option('--data-dir <path>', 'Data directory for persistence', DEFAULT_DATA_DIR)
 	.action(async (options: CliOptions) => {
 		await main(options)
 	})
@@ -34,6 +44,20 @@ async function main(options: CliOptions): Promise<void> {
 	if (!isValidPort(port)) {
 		log.error(`Invalid port: ${options.port}`)
 		process.exit(1)
+	}
+
+	// Handle --continue flag
+	let continueSessionId: string | null = null
+	if (options.continue) {
+		log.info('Looking for recent session...')
+		const continueResult = initializeContinueMode(options.dataDir)
+
+		if (continueResult.hasHistory && continueResult.sessionId) {
+			continueSessionId = continueResult.sessionId
+			log.success(`Found session: ${continueResult.sessionName || continueResult.sessionId}`)
+		} else {
+			log.info('No previous sessions found, starting fresh')
+		}
 	}
 
 	// Validate environment
@@ -75,8 +99,12 @@ async function main(options: CliOptions): Promise<void> {
 		await server.start()
 		log.success(`Server running at http://localhost:${port}`)
 
-		// Open browser
-		const url = `http://localhost:${port}`
+		// Open browser (with session ID if continuing)
+		let url = `http://localhost:${port}`
+		if (continueSessionId) {
+			url = `${url}?session=${encodeURIComponent(continueSessionId)}`
+		}
+
 		if (!options.noBrowser) {
 			log.info('Opening browser...')
 			try {
