@@ -18,6 +18,30 @@ export interface SessionMessage {
 	content: string
 }
 
+// History types
+export interface HistoryMessage {
+	id: number
+	sessionId: string
+	role: 'user' | 'assistant'
+	content: string
+	timestamp: number
+}
+
+export interface HistoryOutput {
+	id: number
+	sessionId: string
+	type: string
+	content: string
+	event: string | null
+	timestamp: number
+}
+
+export interface SessionHistoryData {
+	sessionId: string
+	messages: HistoryMessage[]
+	outputs: HistoryOutput[]
+}
+
 export interface SessionStatus {
 	sessionId: string
 	status: Session['status']
@@ -47,6 +71,7 @@ export interface ServerToClientEvents {
 	'session:destroyed': (data: { sessionId: string }) => void
 	'session:list': (sessions: Session[]) => void
 	'session:error': (data: { sessionId?: string; message: string }) => void
+	'session:history': (data: SessionHistoryData) => void
 }
 
 export interface ClientToServerEvents {
@@ -54,4 +79,5 @@ export interface ClientToServerEvents {
 	'session:message': (data: SessionMessage) => void
 	'session:destroy': (data: { sessionId: string }) => void
 	'session:list': () => void
+	'session:history': (data: { sessionId: string }) => void
 }

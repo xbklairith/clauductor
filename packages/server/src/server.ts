@@ -10,7 +10,13 @@ import type {
 	SessionOutput,
 	SessionStatus,
 } from '@clauductor/shared'
+import { createDatabase } from './db/Database.js'
+import { MessageRepository } from './db/MessageRepository.js'
+import { OutputRepository } from './db/OutputRepository.js'
+import { SessionRepository } from './db/SessionRepository.js'
+import { runMigrations } from './db/migrations/runner.js'
 import { SessionManager } from './services/SessionManager.js'
+import { getSessionHistory } from './utils/history.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -40,9 +46,24 @@ export function createServer(config: ServerConfig): ClauductorServer {
 		},
 	})
 
+	// Initialize database and repositories
+	const dataDir =
+		config.dataDir ||
+		(process.platform === 'darwin'
+			? `${process.env.HOME}/Library/Application Support/clauductor`
+			: `${process.env.HOME}/.local/share/clauductor`)
+	const database = createDatabase(dataDir)
+	runMigrations(database.db)
+	const sessionRepo = new SessionRepository(database.db)
+	const messageRepo = new MessageRepository(database.db)
+	const outputRepo = new OutputRepository(database.db)
+
 	const sessionManager = new SessionManager({
 		dataDir: config.dataDir,
 		claudeCommand: config.claudeCommand,
+		sessionRepository: sessionRepo,
+		messageRepository: messageRepo,
+		outputRepository: outputRepo,
 	})
 
 	// Forward session events to Socket.io clients
@@ -87,6 +108,16 @@ export function createServer(config: ServerConfig): ClauductorServer {
 		socket.on('session:list', () => {
 			const sessions = sessionManager.getAllSessions()
 			socket.emit('session:list', sessions)
+		})
+
+		// Handle session history request
+		socket.on('session:history', (data) => {
+			const history = getSessionHistory(data.sessionId, messageRepo, outputRepo)
+			socket.emit('session:history', {
+				sessionId: data.sessionId,
+				messages: history.messages,
+				outputs: history.outputs,
+			})
 		})
 	})
 
@@ -133,8 +164,14 @@ export function createServer(config: ServerConfig): ClauductorServer {
 		async stop(): Promise<void> {
 			if (!isStarted) return
 
+			// Flush any pending outputs
+			await sessionManager.flushOutputs()
+
 			// Destroy all sessions
 			await sessionManager.destroyAll()
+
+			// Close database
+			database.close()
 
 			return new Promise((resolve, reject) => {
 				io.close()
