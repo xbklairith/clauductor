@@ -61,6 +61,7 @@ export function Terminal({ sessionId }: TerminalProps) {
 	return (
 		<div
 			ref={containerRef}
+			data-testid="terminal-output"
 			className="flex-1 bg-[#0d1117] overflow-hidden"
 		/>
 	)

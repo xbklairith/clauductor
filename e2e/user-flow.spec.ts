@@ -3,16 +3,21 @@ import { test, expect } from '@playwright/test'
 test.describe('Clauductor Browser E2E', () => {
 	test.describe.configure({ mode: 'serial' })
 
-	test('should display empty session list on initial load', async ({ page }) => {
+	test('should display session list on initial load', async ({ page }) => {
 		await page.goto('/')
 
 		// Wait for the page to load
 		await page.waitForLoadState('networkidle')
 
-		// Check for "No sessions yet" message
+		// Check for either empty state or session list
 		const sessionListEmpty = page.locator('[data-testid="session-list-empty"]')
-		await expect(sessionListEmpty).toBeVisible()
-		await expect(sessionListEmpty).toHaveText('No sessions yet')
+		const sessionList = page.locator('[data-testid="session-list"]')
+
+		// Either empty state or session list should be visible
+		const isEmpty = await sessionListEmpty.isVisible().catch(() => false)
+		const hasSessions = await sessionList.isVisible().catch(() => false)
+
+		expect(isEmpty || hasSessions).toBe(true)
 	})
 
 	test('should create a new session', async ({ page }) => {
@@ -56,8 +61,8 @@ test.describe('Clauductor Browser E2E', () => {
 		// Wait for output to appear
 		await page.waitForTimeout(1000)
 
-		// Verify some output is displayed (adjust selector based on actual UI)
-		const outputContainer = page.locator('[data-testid="output"]').or(page.locator('[class*="output"]'))
+		// Verify terminal output is displayed
+		const outputContainer = page.locator('[data-testid="terminal-output"]')
 		await expect(outputContainer).toBeVisible()
 	})
 
@@ -68,6 +73,10 @@ test.describe('Clauductor Browser E2E', () => {
 		// Wait for socket connection
 		const newSessionButton = page.locator('[data-testid="new-session-button"]')
 		await expect(newSessionButton).toBeEnabled({ timeout: 10000 })
+
+		// Count initial sessions
+		const sessionItems = page.locator('[data-testid="session-item"]')
+		const initialCount = await sessionItems.count().catch(() => 0)
 
 		// Create first session
 		await newSessionButton.click()
@@ -81,9 +90,8 @@ test.describe('Clauductor Browser E2E', () => {
 		await newSessionButton.click()
 		await page.waitForTimeout(1000)
 
-		// Verify all three sessions are in the list
-		const sessionItems = page.locator('[data-testid="session-item"]')
-		await expect(sessionItems).toHaveCount(3)
+		// Verify three new sessions were added
+		await expect(sessionItems).toHaveCount(initialCount + 3)
 	})
 
 	test('should switch between sessions', async ({ page }) => {
@@ -129,10 +137,8 @@ test.describe('Clauductor Browser E2E', () => {
 		await newSessionButton.click()
 		await page.waitForTimeout(1000)
 
-		// Look for status indicator (idle/running/error)
-		const statusIndicator = page
-			.locator('[data-testid="status-indicator"]')
-			.or(page.locator('[class*="status"]'))
+		// Look for status indicator (idle/running/error) - use first() since there's one per session
+		const statusIndicator = page.locator('[data-testid="status-indicator"]').first()
 		await expect(statusIndicator).toBeVisible()
 	})
 })

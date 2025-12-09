@@ -1,8 +1,8 @@
 import { io, type Socket } from 'socket.io-client'
 import type { ClientToServerEvents, ServerToClientEvents } from '@clauductor/shared'
 
-// Use env variable or default to localhost
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001'
+// Use env variable or default to current origin (works with any port)
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001')
 
 export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(SOCKET_URL, {
 	autoConnect: false,
