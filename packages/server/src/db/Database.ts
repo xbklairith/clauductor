@@ -27,6 +27,38 @@ export class DatabaseError extends Error {
 }
 
 /**
+ * Result of database integrity check.
+ */
+export interface IntegrityCheckResult {
+	ok: boolean
+	message: string
+}
+
+/**
+ * Checks the integrity of a SQLite database.
+ *
+ * @param db - The database connection to check
+ * @returns Result indicating if database is healthy
+ */
+export function checkDatabaseIntegrity(db: BetterSqlite3.Database): IntegrityCheckResult {
+	try {
+		const results = db.pragma('integrity_check') as Array<{ integrity_check: string }>
+		const message = results[0]?.integrity_check || 'unknown'
+
+		if (message === 'ok') {
+			return { ok: true, message }
+		}
+
+		return { ok: false, message }
+	} catch (error) {
+		return {
+			ok: false,
+			message: error instanceof Error ? error.message : 'Integrity check failed',
+		}
+	}
+}
+
+/**
  * Creates a new SQLite database connection with optimized settings.
  *
  * @param dataDir - Directory where the database file will be stored
